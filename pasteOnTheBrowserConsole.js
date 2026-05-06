@@ -90,8 +90,7 @@ function loadStockfish() {
 
     return stockfishReadyPromise;
 }
-
-async function getLatestPGN(moveArray) {
+async function getLatestPGN(moveArray, targetElo = 900) {
     await waitForChessJs();
     await loadStockfish();
 
@@ -129,7 +128,9 @@ async function getLatestPGN(moveArray) {
             const line = event.data;
 
             if (line.includes('multipv') && line.includes(' pv ')) {
-                const match = line.match(/multipv (\d+).*?score (cp|mate) (-?\d+).*? pv (.+)/);
+                const match = line.match(
+                    /multipv (\d+).*?score (cp|mate) (-?\d+).*? pv (.+)/
+                );
 
                 if (match) {
                     const index = Number(match[1]) - 1;
@@ -139,7 +140,10 @@ async function getLatestPGN(moveArray) {
 
                     topMoves[index] = {
                         move: pv.split(' ')[0],
-                        score: scoreType === 'cp' ? rawScore / 100 : `Mate ${rawScore}`,
+                        score: scoreType === 'cp'
+                            ? rawScore / 100
+                            : `Mate ${rawScore}`,
+                        rawScore,
                         type: scoreType,
                         line: pv
                     };
@@ -147,17 +151,87 @@ async function getLatestPGN(moveArray) {
             }
 
             if (line.startsWith('bestmove')) {
-                resolve(topMoves.filter(Boolean).slice(0, 3));
+                const moves = topMoves.filter(Boolean);
+
+                const selectedMove = pickHumanLikeMove(
+                    moves,
+                    game,
+                    targetElo
+                );
+
+                resolve({
+                    selectedMove,
+                    topMoves: moves.slice(0, 5)
+                });
             }
         };
 
         sf.postMessage('stop');
+
+        sf.postMessage('uci');
+
+        // More candidate moves
+        sf.postMessage('setoption name MultiPV value 8');
+
+        // Limit strength
+        sf.postMessage('setoption name UCI_LimitStrength value true');
+        sf.postMessage(`setoption name UCI_Elo value ${targetElo}`);
+
+        sf.postMessage('ucinewgame');
         sf.postMessage(`position fen ${fen}`);
-        sf.postMessage('go depth 12');
+
+        // Lower depth for more human-like play
+        sf.postMessage('go depth 10');
     });
 }
 
-function showBestMovesBanner(topMoves) {
+function pickHumanLikeMove(topMoves, game, targetElo) {
+    if (!topMoves.length) return null;
+
+    const random = Math.random();
+
+    // ===== VERY LOW ELO =====
+    if (targetElo <= 900) {
+        // Sometimes blunder randomly
+        if (random < 0.15) {
+            const legalMoves = game.moves({ verbose: true });
+
+            const randomMove =
+                legalMoves[Math.floor(Math.random() * legalMoves.length)];
+
+            return {
+                move: randomMove.from + randomMove.to +
+                    (randomMove.promotion || ''),
+                score: 'Random',
+                isRandomBlunder: true
+            };
+        }
+
+        // Weighted selection
+        if (random < 0.50) return topMoves[0];
+        if (random < 0.75) return topMoves[1] || topMoves[0];
+        if (random < 0.90) return topMoves[2] || topMoves[0];
+
+        return topMoves[3] || topMoves[0];
+    }
+
+    // ===== MID ELO =====
+    if (targetElo <= 1500) {
+        if (random < 0.65) return topMoves[0];
+        if (random < 0.85) return topMoves[1] || topMoves[0];
+        if (random < 0.95) return topMoves[2] || topMoves[0];
+
+        return topMoves[3] || topMoves[0];
+    }
+
+    // ===== HIGH ELO =====
+    if (random < 0.85) return topMoves[0];
+    if (random < 0.95) return topMoves[1] || topMoves[0];
+
+    return topMoves[2] || topMoves[0];
+}
+
+function showBestMovesBanner(data) {
     let banner = document.getElementById('best-moves-banner');
 
     if (!banner) {
@@ -181,17 +255,38 @@ function showBestMovesBanner(topMoves) {
         document.body.style.paddingTop = '60px';
     }
 
-    banner.innerHTML = topMoves
-        .map((item, index) => `#${index + 1} ${item.move} | Score: ${item.score}`)
+    const selectedText = data.selectedMove
+        ? `SELECTED: ${data.selectedMove.move}`
+        : 'NO MOVE';
+
+    const topText = data.topMoves
+        .map((item, index) =>
+            `#${index + 1} ${item.move} | Score: ${item.score}`
+        )
         .join(' &nbsp; | &nbsp; ');
+
+    banner.innerHTML = `
+        <div style="margin-bottom:8px;color:blue;">
+            ${selectedText}
+        </div>
+        <div>
+            ${topText}
+        </div>
+    `;
 }
 
 function clearHighlights() {
     document.querySelectorAll('.helper-highlight-svg').forEach(el => el.remove());
 }
-
-function highlightBestMoves(topMoves) {
+function highlightBestMoves(data) {
     clearHighlights();
+
+    const topMoves = Array.isArray(data) ? data : data?.topMoves || [];
+    const selectedMove = Array.isArray(data) ? null : data?.selectedMove;
+
+    const movesToHighlight = selectedMove
+        ? [selectedMove, ...topMoves.filter(m => m.move !== selectedMove.move)]
+        : topMoves;
 
     const board =
         document.querySelector('chess-board') ||
@@ -213,12 +308,14 @@ function highlightBestMoves(topMoves) {
         board.getAttribute('data-board-orientation') === 'black';
 
     const colors = [
-        'rgba(0, 255, 0, 0.45)',
-        'rgba(0, 120, 255, 0.45)',
-        'rgba(255, 230, 0, 0.45)'
+        'rgba(255, 0, 0, 0.50)',     // selected
+        'rgba(0, 255, 0, 0.35)',
+        'rgba(0, 120, 255, 0.35)',
+        'rgba(255, 230, 0, 0.35)'
     ];
 
     const strokeColors = [
+        'rgba(255, 0, 0, 0.95)',     // selected
         'rgba(0, 180, 0, 0.95)',
         'rgba(0, 90, 255, 0.95)',
         'rgba(220, 180, 0, 0.95)'
@@ -249,8 +346,8 @@ function highlightBestMoves(topMoves) {
     svg.style.zIndex = '10';
     svg.style.pointerEvents = 'none';
 
-    svg.innerHTML = topMoves
-        .slice(0, 3)
+    svg.innerHTML = movesToHighlight
+        .slice(0, 4)
         .map((item, index) => {
             const move = item.move;
             if (!move || move.length < 4) return '';
@@ -269,32 +366,31 @@ function highlightBestMoves(topMoves) {
             const size = squareSize - offset * 2;
 
             return `
-  <rect
-    x="${from.x + offset}"
-    y="${from.y + offset}"
-    width="${size}"
-    height="${size}"
-    fill="none"
-    stroke="${strokeColors[index]}"
-    stroke-width="4"
-  />
+                <rect
+                    x="${from.x + offset}"
+                    y="${from.y + offset}"
+                    width="${size}"
+                    height="${size}"
+                    fill="none"
+                    stroke="${strokeColors[index]}"
+                    stroke-width="4"
+                />
 
-  <rect
-    x="${to.x + offset}"
-    y="${to.y + offset}"
-    width="${size}"
-    height="${size}"
-    fill="${colors[index]}"
-    stroke="${strokeColors[index]}"
-    stroke-width="4"
-  />
-`;
+                <rect
+                    x="${to.x + offset}"
+                    y="${to.y + offset}"
+                    width="${size}"
+                    height="${size}"
+                    fill="${colors[index]}"
+                    stroke="${strokeColors[index]}"
+                    stroke-width="4"
+                />
+            `;
         })
         .join('');
 
     board.appendChild(svg);
 }
-
 const run = async () => {
     const moves = getMovesFromHTML();
 
