@@ -90,6 +90,8 @@ function loadStockfish() {
 
     return stockfishReadyPromise;
 }
+
+// JANGAN LUPA RUBAH targetElo agar disesuaikan dengan current ELO kamu
 async function getLatestPGN(moveArray, targetElo = 900) {
     await waitForChessJs();
     await loadStockfish();
