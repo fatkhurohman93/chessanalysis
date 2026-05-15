@@ -798,10 +798,3 @@ async function runChessBoardAnalyzer() {
 }
 
 runChessBoardAnalyzer();
-"""
-
-path = "/mnt/data/chess-board-analyzer-final.js"
-with open(path, "w", encoding="utf-8") as f:
-    f.write(code.strip() + "\n")
-
-path
