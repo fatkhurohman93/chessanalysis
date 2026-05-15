@@ -1,4 +1,3 @@
-code = r"""
 const PROMOTION_FALLBACK = 'Q';
 
 const PIECE_VALUE = {
