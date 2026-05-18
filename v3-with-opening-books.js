@@ -12,13 +12,7 @@ const PIECE_VALUE = {
 const ANALYSIS_DEPTH = 10;
 
 
-// Opening book layer
-// Add or remove lines here. The analyzer will use these moves before Stockfish best move.
-// Format is SAN, the same style as chess.js: e4, Nf3, O-O, exd5, Qxd8#, etc.
-// Chess Opening Book Move Database
-
-
-const OPENING_BOOKS = [
+const OPENING_BOOK_LINES = [
     {
         name: 'Italian Game',
         eco: 'C50',
