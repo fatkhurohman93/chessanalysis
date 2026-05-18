@@ -15,8 +15,8 @@ const ANALYSIS_DEPTH = 10;
 const OPENING_BOOK_LINES = [
 
     // ITALIAN GAMES
-   
-   {
+
+    {
         name: 'Italian Game',
         eco: 'C50',
         moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4']
@@ -928,7 +928,7 @@ const OPENING_BOOK_LINES = [
 
     // RETI
 
-     {
+    {
         name: 'Reti Opening',
         eco: 'A04',
         moves: ['Nf3']
@@ -1339,9 +1339,9 @@ const OPENING_BOOK_LINES = [
         moves: ['e4', 'c5', 'Nf3', 'Nc6', 'd4', 'cxd4', 'Nxd4', 'd6', 'Nc3', 'g6', 'Be3', 'Bg7', 'Bc4', 'Nf6', 'f3', 'Qb6']
     }
 
-    
 
-  
+
+
 ];
 
 
@@ -1354,7 +1354,9 @@ function normalizeSanForCompare(move) {
 function bookMoveToUci(currentGame, sanMove) {
     try {
         const clone = new Chess(currentGame.fen());
-        const result = clone.move(normalizeMove(sanMove), { sloppy: true });
+        const result = clone.move(normalizeMove(sanMove), {
+            sloppy: true
+        });
 
         if (!result) return null;
 
@@ -1509,7 +1511,9 @@ function loadStockfish() {
     stockfishReadyPromise = fetch('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js')
         .then(response => response.text())
         .then(code => {
-            const blob = new Blob([code], { type: 'application/javascript' });
+            const blob = new Blob([code], {
+                type: 'application/javascript'
+            });
             sf = new Worker(URL.createObjectURL(blob));
             sf.postMessage('uci');
             return sf;
@@ -1566,7 +1570,10 @@ function buildBoardMap(game) {
 
 function getControlledSquaresByPiece(square, piece, boardMap) {
     const result = new Set();
-    const { file, rank } = squareToCoord(square);
+    const {
+        file,
+        rank
+    } = squareToCoord(square);
 
     const add = sq => {
         if (sq) result.add(sq);
@@ -1581,8 +1588,14 @@ function getControlledSquaresByPiece(square, piece, boardMap) {
 
     if (piece.type === 'n') {
         [
-            [1, 2], [2, 1], [2, -1], [1, -2],
-            [-1, -2], [-2, -1], [-2, 1], [-1, 2]
+            [1, 2],
+            [2, 1],
+            [2, -1],
+            [1, -2],
+            [-1, -2],
+            [-2, -1],
+            [-2, 1],
+            [-1, 2]
         ].forEach(([df, dr]) => add(coordToSquare(file + df, rank + dr)));
 
         return result;
@@ -1590,8 +1603,14 @@ function getControlledSquaresByPiece(square, piece, boardMap) {
 
     if (piece.type === 'k') {
         [
-            [1, 0], [1, 1], [0, 1], [-1, 1],
-            [-1, 0], [-1, -1], [0, -1], [1, -1]
+            [1, 0],
+            [1, 1],
+            [0, 1],
+            [-1, 1],
+            [-1, 0],
+            [-1, -1],
+            [0, -1],
+            [1, -1]
         ].forEach(([df, dr]) => add(coordToSquare(file + df, rank + dr)));
 
         return result;
@@ -1677,7 +1696,9 @@ function createGameFromCurrentMoves() {
 
     moves.forEach(move => {
         try {
-            const result = game.move(normalizeMove(move), { sloppy: true });
+            const result = game.move(normalizeMove(move), {
+                sloppy: true
+            });
 
             if (result) {
                 verboseMoves.push(result);
@@ -1687,7 +1708,11 @@ function createGameFromCurrentMoves() {
         }
     });
 
-    return { game, moves, verboseMoves };
+    return {
+        game,
+        moves,
+        verboseMoves
+    };
 }
 
 function getFenBeforeLastMove(moves) {
@@ -1695,7 +1720,9 @@ function getFenBeforeLastMove(moves) {
 
     moves.slice(0, -1).forEach(move => {
         try {
-            game.move(normalizeMove(move), { sloppy: true });
+            game.move(normalizeMove(move), {
+                sloppy: true
+            });
         } catch (err) {
             console.warn('Invalid move skipped:', move);
         }
@@ -1774,7 +1801,10 @@ function getBoardMeta(board) {
         board.getAttribute('orientation') === 'black' ||
         board.getAttribute('data-board-orientation') === 'black';
 
-    return { boardRect, isFlipped };
+    return {
+        boardRect,
+        isFlipped
+    };
 }
 
 function getSquarePosition(square, boardRect, isFlipped) {
@@ -1849,7 +1879,10 @@ function renderThreatOverlay(game, extra = {}) {
     const board = getBoardElement();
     if (!board) return;
 
-    const { boardRect, isFlipped } = getBoardMeta(board);
+    const {
+        boardRect,
+        isFlipped
+    } = getBoardMeta(board);
     const svg = createSvg(board, boardRect, 'board-analysis-svg');
     svg.style.zIndex = '10';
 
@@ -1858,13 +1891,13 @@ function renderThreatOverlay(game, extra = {}) {
     const threatRects = threats.map(item => {
         const pos = getSquarePosition(item.square, boardRect, isFlipped);
 
-        const fill = item.severity === 'red'
-            ? 'rgba(255, 0, 0, 0.38)'
-            : 'rgba(255, 165, 0, 0.35)';
+        const fill = item.severity === 'red' ?
+            'rgba(255, 0, 0, 0.38)' :
+            'rgba(255, 165, 0, 0.35)';
 
-        const stroke = item.severity === 'red'
-            ? 'rgba(255, 0, 0, 0.95)'
-            : 'rgba(255, 140, 0, 0.95)';
+        const stroke = item.severity === 'red' ?
+            'rgba(255, 0, 0, 0.95)' :
+            'rgba(255, 140, 0, 0.95)';
 
         return `
             <rect
@@ -1892,11 +1925,11 @@ function renderThreatOverlay(game, extra = {}) {
         const from = getSquarePosition(extra.lastMove.slice(0, 2), boardRect, isFlipped);
         const to = getSquarePosition(extra.lastMove.slice(2, 4), boardRect, isFlipped);
 
-        const color = extra.moveQuality === 'blunder'
-            ? 'rgba(255, 0, 0, 0.95)'
-            : extra.moveQuality === 'mistake'
-                ? 'rgba(255, 120, 0, 0.95)'
-                : 'rgba(255, 200, 0, 0.95)';
+        const color = extra.moveQuality === 'blunder' ?
+            'rgba(255, 0, 0, 0.95)' :
+            extra.moveQuality === 'mistake' ?
+            'rgba(255, 120, 0, 0.95)' :
+            'rgba(255, 200, 0, 0.95)';
 
         arrows += drawArrow(from, to, color, 'last-move-arrow');
     }
@@ -1937,21 +1970,21 @@ function showAnalysisBanner(data) {
     const redCount = data.threats.filter(t => t.severity === 'red').length;
     const orangeCount = data.threats.filter(t => t.severity === 'orange').length;
 
-    const qualityText = data.moveQuality
-        ? `Last move: ${data.moveQuality.toUpperCase()} | Eval drop: ${(data.evalDrop || 0).toFixed(2)}`
-        : 'Last move: OK';
+    const qualityText = data.moveQuality ?
+        `Last move: ${data.moveQuality.toUpperCase()} | Eval drop: ${(data.evalDrop || 0).toFixed(2)}` :
+        'Last move: OK';
 
-    const bestMoveLabel = data.bestMoveSource === 'opening'
-        ? `Opening move: ${data.bestMove || '-'}${data.openingInfo?.nextMoveSan ? ` (${data.openingInfo.nextMoveSan})` : ''}`
-        : `Stockfish best: ${data.bestMove || '-'}`;
+    const bestMoveLabel = data.bestMoveSource === 'opening' ?
+        `Opening move: ${data.bestMove || '-'}${data.openingInfo?.nextMoveSan ? ` (${data.openingInfo.nextMoveSan})` : ''}` :
+        `Stockfish best: ${data.bestMove || '-'}`;
 
-    const openingColor = data.openingInfo?.status === 'active'
-        ? 'blue'
-        : data.openingInfo?.status === 'deviated'
-            ? 'red'
-            : data.openingInfo?.status === 'completed'
-                ? 'purple'
-                : '#666';
+    const openingColor = data.openingInfo?.status === 'active' ?
+        'blue' :
+        data.openingInfo?.status === 'deviated' ?
+        'red' :
+        data.openingInfo?.status === 'completed' ?
+        'purple' :
+        '#666';
 
     banner.innerHTML = `
         <span style="color:red;">Red danger: ${redCount}</span>
@@ -2055,7 +2088,9 @@ function renderPossibleMoveDangerOverlay(fromSquare) {
     const board = getBoardElement();
     if (!board) return;
 
-    const { game } = createGameFromCurrentMoves();
+    const {
+        game
+    } = createGameFromCurrentMoves();
 
     const legalMoves = game.moves({
         square: fromSquare,
@@ -2064,7 +2099,10 @@ function renderPossibleMoveDangerOverlay(fromSquare) {
 
     if (!legalMoves.length) return;
 
-    const { boardRect, isFlipped } = getBoardMeta(board);
+    const {
+        boardRect,
+        isFlipped
+    } = getBoardMeta(board);
     const svg = createSvg(board, boardRect, 'move-danger-svg');
     svg.style.zIndex = '1000';
 
@@ -2093,7 +2131,10 @@ function renderPossibleMoveDangerOverlay(fromSquare) {
 }
 
 function getSquareFromMouseEvent(event, board) {
-    const { boardRect, isFlipped } = getBoardMeta(board);
+    const {
+        boardRect,
+        isFlipped
+    } = getBoardMeta(board);
 
     const x = event.clientX - boardRect.left;
     const y = event.clientY - boardRect.top;
@@ -2129,7 +2170,9 @@ function bindPossibleMoveDangerHover() {
 
         lastSquare = square;
 
-        const { game } = createGameFromCurrentMoves();
+        const {
+            game
+        } = createGameFromCurrentMoves();
         const boardMap = buildBoardMap(game);
         const piece = boardMap[square];
 
@@ -2157,7 +2200,11 @@ async function analyzePosition() {
 
     if (token !== currentAnalysisToken) return;
 
-    const { game, moves, verboseMoves } = createGameFromCurrentMoves();
+    const {
+        game,
+        moves,
+        verboseMoves
+    } = createGameFromCurrentMoves();
 
     if (!moves.length) {
         const openingInfo = getOpeningRecommendation(moves, game);
@@ -2180,9 +2227,9 @@ async function analyzePosition() {
     if (token !== currentAnalysisToken) return;
 
     const openingInfo = getOpeningRecommendation(moves, game);
-    const displayBestMove = openingInfo.status === 'active' && openingInfo.bestMove
-        ? openingInfo.bestMove
-        : afterEval.bestMove;
+    const displayBestMove = openingInfo.status === 'active' && openingInfo.bestMove ?
+        openingInfo.bestMove :
+        afterEval.bestMove;
 
     const beforeWhiteEval = normalizeEvalToWhitePerspective(beforeEval.score, beforeFen);
     const afterWhiteEval = normalizeEvalToWhitePerspective(afterEval.score, currentFen);
@@ -2200,9 +2247,9 @@ async function analyzePosition() {
 
     const moveQuality = classifyMoveDrop(evalDrop);
 
-    const lastMove = lastVerboseMove
-        ? `${lastVerboseMove.from}${lastVerboseMove.to}${lastVerboseMove.promotion || ''}`
-        : null;
+    const lastMove = lastVerboseMove ?
+        `${lastVerboseMove.from}${lastVerboseMove.to}${lastVerboseMove.promotion || ''}` :
+        null;
 
     renderThreatOverlay(game, {
         bestMove: displayBestMove,
