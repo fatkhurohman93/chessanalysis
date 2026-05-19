@@ -1,5 +1,38 @@
 const AUTO_MOVE_ENABLED = true; // Set to true to let the bot automatically play
-const AUTO_MOVE_DELAY = 1000;   // Delay (ms) before executing the move to simulate thinking
+
+function getRandomDelay() {
+
+    // Math.random() generates a decimal between 0 and 1.
+
+    // Checking if it's less than 0.75 gives us an exact 75% probability.
+
+    if (Math.random() < 0.75) {
+
+        // 75% chance: Random number between 1 and 500
+
+        // Math.floor(Math.random() * 500) gives 0 to 499. Adding 1 makes it 1 to 500.
+
+        return Math.floor(Math.random() * 200) + 100;
+
+    } else {
+
+        // 25% chance: Random number between 501 and 1000
+
+        // Math.floor(Math.random() * 500) gives 0 to 499. Adding 501 makes it 501 to 1000.
+
+        return Math.floor(Math.random() * 200) + 201;
+
+    }
+
+}
+
+let AUTO_MOVE_DELAY = getRandomDelay();   // Delay (ms) before executing the move
+
+// --- RANDOM HUMANIZED MISTAKES/INACCURACIES SETTINGS ---
+let MAX_MISTAKES_PER_GAME = 4;      // Maximum number of mistakes allowed per game
+let MAX_INACCURACIES_PER_GAME = 12;  // Maximum number of inaccuracies allowed per game
+const CHANCE_MISTAKE = 0.05;          // 5% chance per move to play a mistake
+const CHANCE_INACCURACY = 0.30;       // 15% chance per move to play an inaccuracy
 
 const PROMOTION_FALLBACK = 'Q';
 
@@ -7,7 +40,12 @@ const PIECE_VALUE = {
     p: 1, n: 3, b: 3, r: 5, q: 9, k: 100
 };
 
-const ANALYSIS_DEPTH = 10;
+const ANALYSIS_DEPTH = 3;
+
+// Game state tracking for randomization
+let currentMistakes = 0;
+let currentInaccuracies = 0;
+let previousMovesCount = 0;
 
 const OPENING_BOOK_LINES = [
     // ITALIAN GAMES
@@ -387,7 +425,7 @@ function getOpeningRecommendation(moves, currentGame) {
                 bestMove: null,
                 expectedMoves,
                 actualMove: moves[moves.length - 1],
-                message: `Opening ended: opponent/player deviated from ${deviatedLines[0].name}. Expected: ${expectedMoves.join(' or ')}, played: ${moves[moves.length - 1]}. Switching back to Stockfish.`
+                message: `Opening ended: opponent deviated from ${deviatedLines[0].name}. Expected: ${expectedMoves.join(' or ')}. Switching back to Stockfish.`
             };
         }
     }
@@ -461,6 +499,9 @@ function loadStockfish() {
             const blob = new Blob([code], { type: 'application/javascript' });
             sf = new Worker(URL.createObjectURL(blob));
             sf.postMessage('uci');
+            
+            // Allow multiple variations to pick intentionally worse moves
+            sf.postMessage('setoption name MultiPV value 10');
             return sf;
         });
 
@@ -640,20 +681,35 @@ function normalizeEvalToWhitePerspective(score, fen) {
 
 function evaluateFen(fen, depth = ANALYSIS_DEPTH) {
     return new Promise(resolve => {
+        let candidateMoves = [];
         let bestMove = null;
-        let lastScore = null;
 
         sf.onmessage = event => {
             const line = event.data;
-            if (line.includes(' score ')) {
-                const match = line.match(/score (cp|mate) (-?\d+)/);
-                if (match) lastScore = { type: match[1], value: Number(match[2]) };
+            
+            // Parse MultiPV lines
+            const infoMatch = line.match(/multipv (\d+).*score (cp|mate) (-?\d+).* pv (\S+)/);
+            if (infoMatch) {
+                const index = Number(infoMatch[1]) - 1;
+                candidateMoves[index] = {
+                    move: infoMatch[4],
+                    score: { type: infoMatch[2], value: Number(infoMatch[3]) }
+                };
             }
 
             if (line.startsWith('bestmove')) {
                 const match = line.match(/^bestmove\s+(\S+)/);
                 bestMove = match?.[1] || null;
-                resolve({ bestMove, score: lastScore });
+                
+                // Fallback in case MultiPV parsing failed
+                if (candidateMoves.length === 0 && bestMove) {
+                    candidateMoves.push({ move: bestMove, score: { type: 'cp', value: 0 } });
+                }
+                
+                resolve({ 
+                    bestMove, 
+                    candidateMoves: candidateMoves.filter(Boolean) 
+                });
             }
         };
 
@@ -664,9 +720,10 @@ function evaluateFen(fen, depth = ANALYSIS_DEPTH) {
     });
 }
 
+// Ensure the UI never classifies anything as a "blunder" 
+// Drops >= 1.5 are maxed out at "mistake"
 function classifyMoveDrop(drop) {
-    if (drop >= 3) return 'blunder';
-    if (drop >= 1.5) return 'mistake';
+    if (drop >= 1.5) return 'mistake'; 
     if (drop >= 0.7) return 'inaccuracy';
     return null;
 }
@@ -705,6 +762,8 @@ function createSvg(board, boardRect, className) {
     svg.classList.add(className);
     svg.setAttribute('viewBox', `0 0 ${boardRect.width} ${boardRect.height}`);
     svg.style.position = 'absolute';
+        svg.style.display = 'none';
+
     svg.style.top = '0';
     svg.style.left = '0';
     svg.style.width = '100%';
@@ -754,7 +813,7 @@ function renderThreatOverlay(game, extra = {}) {
     if (extra.lastMove && extra.moveQuality && /^[a-h][1-8][a-h][1-8]/.test(extra.lastMove)) {
         const from = getSquarePosition(extra.lastMove.slice(0, 2), boardRect, isFlipped);
         const to = getSquarePosition(extra.lastMove.slice(2, 4), boardRect, isFlipped);
-        const color = extra.moveQuality === 'blunder' ? 'rgba(255, 0, 0, 0.95)' : extra.moveQuality === 'mistake' ? 'rgba(255, 120, 0, 0.95)' : 'rgba(255, 200, 0, 0.95)';
+        const color = extra.moveQuality === 'mistake' ? 'rgba(255, 120, 0, 0.95)' : 'rgba(255, 200, 0, 0.95)';
         arrows += drawArrow(from, to, color, 'last-move-arrow');
     }
 
@@ -769,6 +828,8 @@ function showAnalysisBanner(data) {
     const banner = document.createElement('div');
     banner.id = 'board-analysis-banner';
     banner.style.position = 'fixed';
+            banner.style.display = 'none';
+
     banner.style.top = '0';
     banner.style.left = '0';
     banner.style.right = '0';
@@ -906,13 +967,9 @@ function bindPossibleMoveDangerHover() {
     });
 }
 
-// --- NEW AUTOMATION / MOVEMENT LOGIC ---
-
-// Converts 'e2' to the '52' format used in the HTML board matrices.
 function uciToSquareClass(sq) {
     if (/^\d{2}$/.test(sq)) return `square-${sq}`;
     if (/^[a-h][1-8]$/.test(sq)) {
-        // 'a'.charCodeAt(0) is 97. 97 - 96 = 1 (file 1 -> a)
         return `square-${sq.charCodeAt(0) - 96}${sq[1]}`;
     }
     return '';
@@ -928,7 +985,6 @@ async function chessMove(from, to) {
     const piece = board.querySelector(`.piece.${fromClass}`);
     if (!piece) return console.error(`Failed to find piece at starting square: ${from} (${fromClass})`);
 
-    // Helper to fire standard pointer events required by Chess.com movement code
     const simulateClick = (x, y) => {
         const eventOptions = { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y, buttons: 1, pointerId: 1, isPrimary: true };
         board.dispatchEvent(new PointerEvent('pointerdown', eventOptions));
@@ -938,24 +994,18 @@ async function chessMove(from, to) {
         board.dispatchEvent(new MouseEvent('click', eventOptions));
     };
 
-    // 1. Click the piece to select it and summon the standard UI hint circles
     const pRect = piece.getBoundingClientRect();
     simulateClick(pRect.left + pRect.width / 2, pRect.top + pRect.height / 2);
 
-    // 2. Allow a short pause to ensure the frontend framework renders the hint targets
     await new Promise(r => setTimeout(r, 75));
 
-    // 3. Find and click the rendered hint dot, or fallback to direct coordinate clicking
     const hint = board.querySelector(`.hint.${toClass}`);
     if (hint) {
         const hRect = hint.getBoundingClientRect();
         simulateClick(hRect.left + hRect.width / 2, hRect.top + hRect.height / 2);
     } else {
-        // Fallback computation exactly the way your codebase does it
         const { boardRect, isFlipped } = getBoardMeta(board);
         let algTo = to;
-        
-        // Ensures conversion if we accidentally passed '54' instead of 'e4'
         if (/^\d{2}$/.test(to)) algTo = String.fromCharCode(parseInt(to[0]) + 96) + to[1];
 
         const targetPos = getSquarePosition(algTo, boardRect, isFlipped);
@@ -1030,19 +1080,59 @@ async function analyzePosition() {
     });
 
     // ----------------------------------------------------
-    // AUTOMATION HOOK: Make the move if enabled
+    // AUTOMATION HOOK: Humanized Random Moves
     // ----------------------------------------------------
     if (AUTO_MOVE_ENABLED && displayBestMove) {
         const board = getBoardElement();
-        // Uses the orientation string/class to determine what side the computer represents
         const myColor = getBoardMeta(board).isFlipped ? 'b' : 'w';
         
-        // Execute the move only if it is the current player's turn 
         if (game.turn() === myColor) {
-            const moveFrom = displayBestMove.slice(0, 2);
-            const moveTo = displayBestMove.slice(2, 4);
+            let finalMoveToPlay = displayBestMove;
             
-            // Allow a small delay to simulate human thinking latency
+            // Only consider sub-optimal moves if we have left the opening book and have candidate variations
+            if (openingInfo.status !== 'active' && afterEval.candidateMoves.length > 1) {
+                const roll = Math.random();
+                let targetMinDrop = 0, targetMaxDrop = 0;
+                let moveType = null;
+                
+                if (currentMistakes < MAX_MISTAKES_PER_GAME && roll < CHANCE_MISTAKE) {
+                    targetMinDrop = 150; 
+                    targetMaxDrop = 300; // Hard limit at 300 centipawns so it does not blunder
+                    moveType = 'mistake';
+                } else if (currentInaccuracies < MAX_INACCURACIES_PER_GAME && roll < (CHANCE_MISTAKE + CHANCE_INACCURACY)) {
+                    targetMinDrop = 70; 
+                    targetMaxDrop = 150;
+                    moveType = 'inaccuracy';
+                }
+
+                if (moveType) {
+                    // Score is relative to engine evaluation player (positive = winning)
+                    const topScore = afterEval.candidateMoves[0].score;
+                    const bestCp = topScore.type === 'mate' ? Math.sign(topScore.value) * 10000 : topScore.value;
+                    
+                    // Shuffle variations so the opponent can't predict the exact sub-optimal move pattern
+                    const shuffledCandidates = [...afterEval.candidateMoves.slice(1)].sort(() => Math.random() - 0.5);
+
+                    for (const candidate of shuffledCandidates) {
+                        if (!candidate || !candidate.score) continue;
+                        const candidateCp = candidate.score.type === 'mate' ? Math.sign(candidate.score.value) * 10000 : candidate.score.value;
+                        const drop = bestCp - candidateCp; // Compute the centipawn drop
+                        
+                        // Select the move if it falls perfectly inside our target threshold
+                        if (drop >= targetMinDrop && drop <= targetMaxDrop) {
+                            finalMoveToPlay = candidate.move;
+                            if (moveType === 'mistake') currentMistakes++;
+                            if (moveType === 'inaccuracy') currentInaccuracies++;
+                            console.log(`🤖 Playing intentional ${moveType}! Eval drop: ${drop / 100} (${currentMistakes}/${MAX_MISTAKES_PER_GAME} mistakes, ${currentInaccuracies}/${MAX_INACCURACIES_PER_GAME} inaccuracies used)`);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            const moveFrom = finalMoveToPlay.slice(0, 2);
+            const moveTo = finalMoveToPlay.slice(2, 4);
+            
             setTimeout(() => {
                 chessMove(moveFrom, moveTo);
             }, AUTO_MOVE_DELAY);
@@ -1062,7 +1152,17 @@ function startObserving() {
     const observer = new MutationObserver(() => {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
-            const currentMoveString = getMovesFromHTML().join(' ');
+            const currentMoves = getMovesFromHTML();
+            const currentMoveString = currentMoves.join(' ');
+            
+            // Detect if a new game has started (or a new setup) to reset counts
+            if (currentMoves.length < previousMovesCount || currentMoves.length === 0) {
+                currentMistakes = 0;
+                currentInaccuracies = 0;
+                console.log("🔄 New game detected, resetting inaccuracies and mistakes counters.");
+            }
+            previousMovesCount = currentMoves.length;
+
             if (currentMoveString !== lastMoveString) {
                 lastMoveString = currentMoveString;
                 clearMoveDangerOverlay();
@@ -1081,7 +1181,7 @@ async function runChessBoardAnalyzer() {
     startObserving();
     analyzePosition();
 
-    console.log('Chess board analyzer started with auto-move integration');
+    console.log('Chess board analyzer started with humanized randomization');
 }
 
 runChessBoardAnalyzer();
