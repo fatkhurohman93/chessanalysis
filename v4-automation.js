@@ -1,14 +1,22 @@
 const AUTO_MOVE_ENABLED = true; // Set to true to let the bot automatically play
 
+// function getRandomDelay() {
+//     if (Math.random() < 0.75) {
+//         return Math.floor(Math.random() * 200) + 100;
+//     } else {
+//         return Math.floor(Math.random() * 1500) + 201;
+//     }
+// }
+
 function getRandomDelay() {
-    if (Math.random() < 0.75) {
-        return Math.floor(Math.random() * 200) + 100;
+    if (Math.random() < 0.40) {
+        return Math.floor(Math.random() * 1000) + 100;
     } else {
-        return Math.floor(Math.random() * 1500) + 201;
+        return Math.floor(Math.random() * 2500) + 1001;
     }
 }
 
-let CUSTOM_DELAY = 0;
+let CUSTOM_DELAY = null;
 
 // Global state for the current move's delay
 let currentDelay = CUSTOM_DELAY ?? getRandomDelay();
@@ -33,19 +41,29 @@ const botSettings = {
         return 3; // Base value
     },
     get CHANCE_MISTAKE() {
-        if (currentDelay < 150) return 0.25;
-        if (currentDelay < 250) return 0.20;
-        if (currentDelay < 600) return 0.15;
-        if (currentDelay < 1000) return 0.10;
-        if (currentDelay < 1501) return 0.05;
+        if (currentDelay < 150) return 0.35;
+        if (currentDelay < 250) return 0.30;
+        if (currentDelay < 600) return 0.25;
+        if (currentDelay < 1000) return 0.15;
+        if (currentDelay < 1501) return 0.10;
+        // if (currentDelay < 150) return 0.25;
+        // if (currentDelay < 250) return 0.20;
+        // if (currentDelay < 600) return 0.15;
+        // if (currentDelay < 1000) return 0.10;
+        // if (currentDelay < 1501) return 0.05;
         return 0.05; // Base value
     },
     get CHANCE_INACCURACY() {
-         if (currentDelay < 150) return 0.40;
-        if (currentDelay < 250) return 0.30;
-        if (currentDelay < 600) return 0.25;
-        if (currentDelay < 1000) return 0.20;
+         if (currentDelay < 150) return 0.60;
+        if (currentDelay < 250) return 0.40;
+        if (currentDelay < 600) return 0.35;
+        if (currentDelay < 1000) return 0.30;
         if (currentDelay < 1501) return 0.15;
+        //  if (currentDelay < 150) return 0.40;
+        // if (currentDelay < 250) return 0.30;
+        // if (currentDelay < 600) return 0.25;
+        // if (currentDelay < 1000) return 0.20;
+        // if (currentDelay < 1501) return 0.15;
         return 0.15; // Base value
     }
 };
@@ -1107,7 +1125,7 @@ async function analyzePosition() {
             
             // ROLL A NEW DELAY FOR THIS SPECIFIC MOVE
             // This instantly cascades down to update all the botSettings limits!
-            currentDelay = getRandomDelay();
+            currentDelay = CUSTOM_DELAY ?? getRandomDelay();
             
             // Only consider sub-optimal moves if we have left the opening book and have candidate variations
             if (openingInfo.status !== 'active' && afterEval.candidateMoves.length > 1) {
