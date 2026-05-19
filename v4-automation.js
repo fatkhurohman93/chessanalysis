@@ -1,38 +1,54 @@
 const AUTO_MOVE_ENABLED = true; // Set to true to let the bot automatically play
 
 function getRandomDelay() {
-
-    // Math.random() generates a decimal between 0 and 1.
-
-    // Checking if it's less than 0.75 gives us an exact 75% probability.
-
     if (Math.random() < 0.75) {
-
-        // 75% chance: Random number between 1 and 500
-
-        // Math.floor(Math.random() * 500) gives 0 to 499. Adding 1 makes it 1 to 500.
-
         return Math.floor(Math.random() * 200) + 100;
-
     } else {
-
-        // 25% chance: Random number between 501 and 1000
-
-        // Math.floor(Math.random() * 500) gives 0 to 499. Adding 501 makes it 501 to 1000.
-
-        return Math.floor(Math.random() * 200) + 201;
-
+        return Math.floor(Math.random() * 1500) + 201;
     }
-
 }
 
-let AUTO_MOVE_DELAY = getRandomDelay();   // Delay (ms) before executing the move
+let CUSTOM_DELAY = 0;
 
-// --- RANDOM HUMANIZED MISTAKES/INACCURACIES SETTINGS ---
-let MAX_MISTAKES_PER_GAME = 4;      // Maximum number of mistakes allowed per game
-let MAX_INACCURACIES_PER_GAME = 12;  // Maximum number of inaccuracies allowed per game
-const CHANCE_MISTAKE = 0.05;          // 5% chance per move to play a mistake
-const CHANCE_INACCURACY = 0.30;       // 15% chance per move to play an inaccuracy
+// Global state for the current move's delay
+let currentDelay = CUSTOM_DELAY ?? getRandomDelay();
+
+// --- DYNAMIC HUMANIZED MISTAKES/INACCURACIES SETTINGS ---
+// These values will automatically update themselves whenever `currentDelay` changes
+const botSettings = {
+    get MAX_MISTAKES_PER_GAME() {
+        if (currentDelay < 150) return 12;
+        if (currentDelay < 250) return 8;
+        if (currentDelay < 600) return 6;
+        if (currentDelay < 1000) return 4;
+        if (currentDelay < 1501) return 2;
+        return 2; // Base value
+    },
+    get MAX_INACCURACIES_PER_GAME() {
+        if (currentDelay < 150) return 30;
+        if (currentDelay < 250) return 20;
+        if (currentDelay < 600) return 10;
+        if (currentDelay < 1000) return 6;
+        if (currentDelay < 1501) return 3;
+        return 3; // Base value
+    },
+    get CHANCE_MISTAKE() {
+        if (currentDelay < 150) return 0.25;
+        if (currentDelay < 250) return 0.20;
+        if (currentDelay < 600) return 0.15;
+        if (currentDelay < 1000) return 0.10;
+        if (currentDelay < 1501) return 0.05;
+        return 0.05; // Base value
+    },
+    get CHANCE_INACCURACY() {
+         if (currentDelay < 150) return 0.40;
+        if (currentDelay < 250) return 0.30;
+        if (currentDelay < 600) return 0.25;
+        if (currentDelay < 1000) return 0.20;
+        if (currentDelay < 1501) return 0.15;
+        return 0.15; // Base value
+    }
+};
 
 const PROMOTION_FALLBACK = 'Q';
 
@@ -1089,17 +1105,21 @@ async function analyzePosition() {
         if (game.turn() === myColor) {
             let finalMoveToPlay = displayBestMove;
             
+            // ROLL A NEW DELAY FOR THIS SPECIFIC MOVE
+            // This instantly cascades down to update all the botSettings limits!
+            currentDelay = getRandomDelay();
+            
             // Only consider sub-optimal moves if we have left the opening book and have candidate variations
             if (openingInfo.status !== 'active' && afterEval.candidateMoves.length > 1) {
                 const roll = Math.random();
                 let targetMinDrop = 0, targetMaxDrop = 0;
                 let moveType = null;
                 
-                if (currentMistakes < MAX_MISTAKES_PER_GAME && roll < CHANCE_MISTAKE) {
+                if (currentMistakes < botSettings.MAX_MISTAKES_PER_GAME && roll < botSettings.CHANCE_MISTAKE) {
                     targetMinDrop = 150; 
                     targetMaxDrop = 300; // Hard limit at 300 centipawns so it does not blunder
                     moveType = 'mistake';
-                } else if (currentInaccuracies < MAX_INACCURACIES_PER_GAME && roll < (CHANCE_MISTAKE + CHANCE_INACCURACY)) {
+                } else if (currentInaccuracies < botSettings.MAX_INACCURACIES_PER_GAME && roll < (botSettings.CHANCE_MISTAKE + botSettings.CHANCE_INACCURACY)) {
                     targetMinDrop = 70; 
                     targetMaxDrop = 150;
                     moveType = 'inaccuracy';
@@ -1123,7 +1143,9 @@ async function analyzePosition() {
                             finalMoveToPlay = candidate.move;
                             if (moveType === 'mistake') currentMistakes++;
                             if (moveType === 'inaccuracy') currentInaccuracies++;
-                            console.log(`🤖 Playing intentional ${moveType}! Eval drop: ${drop / 100} (${currentMistakes}/${MAX_MISTAKES_PER_GAME} mistakes, ${currentInaccuracies}/${MAX_INACCURACIES_PER_GAME} inaccuracies used)`);
+                            
+                            // Using our new dynamic settings for the console log readout
+                            console.log(`🤖 Playing intentional ${moveType}! Eval drop: ${drop / 100} (${currentMistakes}/${botSettings.MAX_MISTAKES_PER_GAME} mistakes, ${currentInaccuracies}/${botSettings.MAX_INACCURACIES_PER_GAME} inaccuracies used)`);
                             break;
                         }
                     }
@@ -1135,7 +1157,7 @@ async function analyzePosition() {
             
             setTimeout(() => {
                 chessMove(moveFrom, moveTo);
-            }, AUTO_MOVE_DELAY);
+            }, currentDelay); // We pass the newly generated delay right here
         }
     }
 }
@@ -1181,7 +1203,7 @@ async function runChessBoardAnalyzer() {
     startObserving();
     analyzePosition();
 
-    console.log('Chess board analyzer started with humanized randomization');
+    console.log('Chess board analyzer started with dynamic humanized randomization');
 }
 
 runChessBoardAnalyzer();
