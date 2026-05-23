@@ -1,20 +1,20 @@
 const AUTO_MOVE_ENABLED = true; // Set to true to let the bot automatically play
 
-// function getRandomDelay() {
-//     if (Math.random() < 0.75) {
-//         return Math.floor(Math.random() * 200) + 100;
-//     } else {
-//         return Math.floor(Math.random() * 1500) + 201;
-//     }
-// }
-
 function getRandomDelay() {
-    if (Math.random() < 0.40) {
-        return Math.floor(Math.random() * 1000) + 100;
+    if (Math.random() < 0.75) {
+        return Math.floor(Math.random() * 200) + 100;
     } else {
-        return Math.floor(Math.random() * 2500) + 1001;
+        return Math.floor(Math.random() * 900) + 201;
     }
 }
+
+// function getRandomDelay() {
+//     if (Math.random() < 0.40) {
+//         return Math.floor(Math.random() * 1000) + 100;
+//     } else {
+//         return Math.floor(Math.random() * 2500) + 1001;
+//     }
+// }
 
 let CUSTOM_DELAY = null;
 
@@ -74,11 +74,11 @@ const PIECE_VALUE = {
     p: 1, n: 3, b: 3, r: 5, q: 9, k: 100
 };
 
-const ANALYSIS_DEPTH = 3;
+let ANALYSIS_DEPTH = 4;
 
 // Game state tracking for randomization
-let currentMistakes = 0;
-let currentInaccuracies = 0;
+let currentMistakes = 1000;
+let currentInaccuracies = 10;
 let previousMovesCount = 0;
 
 const OPENING_BOOK_LINES = [
@@ -1197,8 +1197,8 @@ function startObserving() {
             
             // Detect if a new game has started (or a new setup) to reset counts
             if (currentMoves.length < previousMovesCount || currentMoves.length === 0) {
-                currentMistakes = 0;
-                currentInaccuracies = 0;
+                currentMistakes = 1000;
+                currentInaccuracies = 10;
                 console.log("🔄 New game detected, resetting inaccuracies and mistakes counters.");
             }
             previousMovesCount = currentMoves.length;
